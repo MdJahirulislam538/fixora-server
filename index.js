@@ -43,7 +43,7 @@ const connectedClient = await connectToMongoDB();
 const database = connectedClient.db("fixoraClientDb");
 
 const usersCollection = database.collection("user");
-const productsCollection = database.collection("product");
+const servicesCollection = database.collection("service");
 
 app.get('/users', async (req, res) => {
   try {
@@ -56,7 +56,16 @@ app.get('/users', async (req, res) => {
   }
 });
 
-
+app.get('/services', async (req, res) => {
+  try {
+    const service = req.body;
+    const services = await servicesCollection.insertOne(service);
+    res.send(services);
+  } catch (error) {   
+    console.error('Error fetching services:', error); 
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 app.get('/', (req, res) => {
   res.send('Hello World!');
