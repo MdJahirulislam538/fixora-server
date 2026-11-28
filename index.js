@@ -51,23 +51,33 @@ const bookingsCollection = database.collection("bookings");
 const paymentsCollection = database.collection("payments");
 
 function authenticateInternalRequest(req, res, next) {
-  const expectedKey = process.env.FIXORA_SERVER_API_KEY;
-  if (!expectedKey) {
-    return res.status(503).json({ message: "The Fixora API is not configured." });
-  }
-
-  const providedKey = req.get("x-fixora-api-key") || "";
-  const expected = Buffer.from(expectedKey);
-  const provided = Buffer.from(providedKey);
-  if (
-    expected.length !== provided.length ||
-    !crypto.timingSafeEqual(expected, provided)
-  ) {
-    return res.status(401).json({ message: "Unauthorized API request." });
-  }
-
   const encodedUser = req.get("x-fixora-user");
   if (encodedUser) {
+    const secret = process.env.BETTER_AUTH_SECRET;
+    const timestamp = req.get("x-fixora-timestamp") || "";
+    const signature = req.get("x-fixora-signature") || "";
+    if (!secret) {
+      return res.status(503).json({
+        message:
+          "BETTER_AUTH_SECRET is missing from the FIXORA Server deployment.",
+      });
+    }
+
+    const requestTime = Number(timestamp);
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(`${timestamp}.${encodedUser}`)
+      .digest();
+    const providedSignature = Buffer.from(signature, "hex");
+    if (
+      !Number.isSafeInteger(requestTime) ||
+      Math.abs(Date.now() - requestTime) > 5 * 60 * 1000 ||
+      providedSignature.length !== expectedSignature.length ||
+      !crypto.timingSafeEqual(expectedSignature, providedSignature)
+    ) {
+      return res.status(401).json({ message: "Invalid authenticated request." });
+    }
+
     try {
       const user = JSON.parse(Buffer.from(encodedUser, "base64url").toString("utf8"));
       if (
@@ -91,7 +101,6 @@ function authenticateInternalRequest(req, res, next) {
 
 api.use(authenticateInternalRequest);
 app.use("/api", api);
-app.use("/users", authenticateInternalRequest);
 
 function requireRoles(req, res, roles) {
   if (!req.fixoraUser) {
@@ -191,7 +200,7 @@ async function getActivityDays(collection, filter) {
   });
 }
 
-api.get("/services", async (req, res) => {
+async function listServices(req, res) {
   const includeUnavailable = req.query.includeUnavailable === "true";
   const filter = includeUnavailable
     ? { approvalStatus: "approved" }
@@ -201,9 +210,9 @@ api.get("/services", async (req, res) => {
     .sort({ createdAt: -1 })
     .toArray();
   res.json({ services: services.map(serializeDocument) });
-});
+}
 
-api.get("/services/:id", async (req, res) => {
+async function getServiceById(req, res) {
   const { id } = req.params;
   if (!isValidObjectId(id)) {
     return res.status(404).json({ message: "Service not found." });
@@ -238,7 +247,12 @@ api.get("/services/:id", async (req, res) => {
     bio: legacyTechnician.bio ?? technicianProfile?.bio ?? "",
   };
   res.json({ service: serializeDocument({ ...service, technician }) });
-});
+}
+
+api.get("/services", listServices);
+api.get("/services/:id", getServiceById);
+app.get("/services", listServices);
+app.get("/services/:id", getServiceById);
 
 api.get("/dashboard/services", async (req, res) => {
   if (!requireRoles(req, res, ["technician", "admin"])) return;
@@ -786,11 +800,6 @@ api.get("/dashboard/summary", async (req, res) => {
     ],
     activity,
   });
-});
-
-app.get("/users", async (_req, res) => {
-  const users = await usersCollection.find({}).toArray();
-  res.status(200).json(users);
 });
 
 app.get("/", (_req, res) => {

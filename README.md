@@ -16,10 +16,10 @@ Create `fixora-server/.env` with:
 MONGODB_URI="your-mongodb-connection-string"
 MONGODB_DATABASE="fixoraClientDb"
 PORT=8000
-FIXORA_SERVER_API_KEY="a-long-random-shared-secret"
+BETTER_AUTH_SECRET="the-same-secret-configured-in-fixora-client"
 ```
 
-Set `FIXORA_SERVER_API_KEY` to the same secret in the FIXORA Client deployment environment. The Next.js API verifies the user's Better Auth session and role, then forwards approved requests to this API using that secret. Do not expose the secret in a `NEXT_PUBLIC_` variable or commit it.
+Use the same `BETTER_AUTH_SECRET` in the FIXORA Client and Server so authenticated requests can be verified without a separate API key. For Vercel, add it to both projects' Production environments (and Preview if used), then redeploy both projects. Do not expose or commit the secret value. The public service catalog is available at `http://localhost:8000/services`. The client uses `NEXT_PUBLIC_API_URL` to select this server; it defaults to `http://localhost:8000` during local development.
 
 For online checkout, also configure:
 
@@ -35,18 +35,17 @@ Configure these variables in the **fixora-server** Vercel project:
 
 - `MONGODB_URI` (or `DB_USER` and `DB_PASSWORD`)
 - `MONGODB_DATABASE=fixoraClientDb`
-- `FIXORA_SERVER_API_KEY`
+- `BETTER_AUTH_SECRET` — use the same value configured in the client project
 - `STRIPE_SECRET_KEY` if online checkout is enabled
 
 Configure these variables in the **fixora-client** Vercel project:
 
 - `NEXT_PUBLIC_API_URL=https://fixora-server-coral.vercel.app`
-- `FIXORA_SERVER_API_KEY` — use the exact same secret as the server project
 - `MONGODB_URI` and `MONGODB_DATABASE=fixoraClientDb` for Better Auth and client-owned profile/user data
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL` set to the client project's public URL
 
-Add the variables to the Production environment (and Preview if used), then redeploy both projects. `NEXT_PUBLIC_API_URL` is used by the client deployment; `FIXORA_SERVER_API_KEY` must stay server-side and must never use a `NEXT_PUBLIC_` prefix.
+Add the variables to the Production environment (and Preview if used), then redeploy both projects. `NEXT_PUBLIC_API_URL` is used by the client deployment.
 
 ## Run locally
 
